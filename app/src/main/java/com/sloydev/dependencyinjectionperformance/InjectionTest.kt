@@ -14,13 +14,13 @@ import com.sloydev.dependencyinjectionperformance.koin.koinKotlinModule
 import org.kodein.di.Kodein
 import org.kodein.di.direct
 import org.kodein.di.erased.instance
-import org.koin.core.time.measureDuration
-import org.koin.log.Logger
-import org.koin.standalone.KoinComponent
-import org.koin.standalone.StandAloneContext
-import org.koin.standalone.StandAloneContext.stopKoin
-import org.koin.standalone.get
+import org.koin.core.KoinApplication
+import org.koin.core.KoinComponent
+import org.koin.core.get
+import org.koin.core.logger.EmptyLogger
+import org.koin.dsl.koinApplication
 import javax.inject.Inject
+import kotlin.system.measureNanoTime
 
 class InjectionTest : KoinComponent {
 
@@ -28,18 +28,6 @@ class InjectionTest : KoinComponent {
     private val javaDaggerTest = JavaDaggerTest()
 
     private val rounds = 100
-
-    private val testLogger = object : Logger {
-        override fun debug(msg: String) {
-            //Log.d("KOIN-PERFORMANCE", msg)
-        }
-
-        override fun info(msg: String) {
-        }
-
-        override fun err(msg: String) {
-        }
-    }
 
     fun runTests() {
         Log.d("KOIN-RESULT", " ")
@@ -58,42 +46,50 @@ class InjectionTest : KoinComponent {
     }
 
     private fun runKoinKotlinInjection() {
-        val startup = measureDuration {
-            StandAloneContext.startKoin(listOf(koinKotlinModule), logger = testLogger)
+        lateinit var koin: KoinApplication
+        val startup = measureTime {
+            koin = koinApplication {
+                useLogger(logger = EmptyLogger())
+                loadModules(koinKotlinModule)
+            }.start()
         }
 
         val durations = (1..rounds).map {
-            measureDuration {
+            measureTime {
                 get<Fib8>()
             }
         }
+        koin.stop()
         report(durations, startup, "Koin + Kotlin")
-        stopKoin()
     }
 
     private fun runKoinJavaInjection() {
-        val startup = measureDuration {
-            StandAloneContext.startKoin(listOf(koinJavaModule), logger = testLogger)
+        lateinit var koin: KoinApplication
+        val startup = measureTime {
+            koin = koinApplication {
+                useLogger(logger = EmptyLogger())
+                loadModules(koinJavaModule)
+            }.start()
         }
 
         val durations = (1..rounds).map {
-            measureDuration {
+            measureTime {
                 get<FibonacciJava.Fib8>()
             }
         }
+        koin.stop()
         report(durations, startup, "Koin + Java")
-        stopKoin()
     }
 
     private fun runKodeinKotlinInjection() {
         lateinit var kodein: Kodein
-        val startup = measureDuration {
+        val startup = measureTime {
             kodein = Kodein {
                 import(kodeinKotlinModule)
             }
         }
         val durations = (1..rounds).map {
-            measureDuration {
+            measureTime {
                 kodein.direct.instance<Fib8>()
             }
         }
@@ -102,13 +98,13 @@ class InjectionTest : KoinComponent {
 
     private fun runKodeinJavaInjection() {
         lateinit var kodein: Kodein
-        val startup = measureDuration {
+        val startup = measureTime {
             kodein = Kodein {
                 import(kodeinJavaModule)
             }
         }
         val durations = (1..rounds).map {
-            measureDuration {
+            measureTime {
                 kodein.direct.instance<FibonacciJava.Fib8>()
             }
         }
@@ -117,11 +113,11 @@ class InjectionTest : KoinComponent {
 
     private fun runDaggerKotlinInjection() {
         lateinit var component: KotlinDaggerComponent
-        val startup = measureDuration {
+        val startup = measureTime {
             component = DaggerKotlinDaggerComponent.create()
         }
         val durations = (1..rounds).map {
-            measureDuration {
+            measureTime {
                 component.inject(kotlinDaggerTest)
             }
         }
@@ -130,11 +126,11 @@ class InjectionTest : KoinComponent {
 
     private fun runDaggerJavaInjection() {
         lateinit var component: JavaDaggerComponent
-        val startup = measureDuration {
+        val startup = measureTime {
             component = DaggerJavaDaggerComponent.create()
         }
         val durations = (1..rounds).map {
-            measureDuration {
+            measureTime {
                 component.inject(javaDaggerTest)
             }
         }
@@ -142,11 +138,11 @@ class InjectionTest : KoinComponent {
     }
 
     private fun runCustomKotlinInjection() {
-        val startup = measureDuration {
+        val startup = measureTime {
             DIContainer.loadModule(customKotlinModule)
         }
         val durations = (1..rounds).map {
-            measureDuration {
+            measureTime {
                 DIContainer.get<Fib8>()
             }
         }
@@ -154,11 +150,11 @@ class InjectionTest : KoinComponent {
     }
 
     private fun runCustomJavaInjection() {
-        val startup = measureDuration {
+        val startup = measureTime {
             DIContainer.loadModule(customJavaModule)
         }
         val durations = (1..rounds).map {
-            measureDuration {
+            measureTime {
                 DIContainer.get<FibonacciJava.Fib8>()
             }
         }
@@ -174,6 +170,8 @@ class InjectionTest : KoinComponent {
     }
 
     private fun Double?.format() = String.format("%.2f", this)
+
+    private fun measureTime(block: () -> Unit) = measureNanoTime(block) / 1000000.0
 
     class KotlinDaggerTest {
         @Inject
